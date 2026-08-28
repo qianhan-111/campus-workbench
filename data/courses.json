@@ -1,0 +1,9 @@
+[
+  { "id": "高数", "name": "高等数学A", "weekday": 1, "start": "08:00", "end": "09:40", "room": "教三 402", "teacher": "张伟", "weeks": "1-16", "category": "必修", "color": "#E6F1FB", "note": "教材：同济高数第 8 版" },
+  { "id": "OS", "name": "操作系统", "weekday": 2, "start": "10:00", "end": "11:40", "room": "计算楼 305", "teacher": "李静", "weeks": "1-16", "category": "必修", "color": "#E1F5EE", "note": "课件按周更新，课后 24h 内归档" },
+  { "id": "DS", "name": "数据结构", "weekday": 3, "start": "08:00", "end": "09:40", "room": "教三 201", "teacher": "王强", "weeks": "1-16", "category": "必修", "color": "#FAEEDA", "note": "" },
+  { "id": "EN", "name": "大学英语", "weekday": 4, "start": "14:00", "end": "15:40", "room": "外语楼 205", "teacher": "Sarah", "weeks": "1-16", "category": "选修", "color": "#FBEAF0", "note": "" },
+  { "id": "OSLAB", "name": "操作系统实验", "weekday": 5, "start": "14:00", "end": "16:40", "room": "计算楼 机房2", "teacher": "李静", "weeks": "2-16", "category": "实验", "color": "#EAF3DE", "note": "先看实验指导，上机前写预实验" },
+  { "id": "ML", "name": "机器学习导论", "weekday": 6, "start": "09:00", "end": "10:40", "room": "教三 305", "teacher": "赵敏", "weeks": "1-12", "category": "选修", "color": "#EEEDFE", "note": "" },
+  { "id": "ENL", "name": "大学英语听说", "weekday": 6, "start": "14:00", "end": "15:40", "room": "外语楼 301", "teacher": "Sarah", "weeks": "1-16", "category": "选修", "color": "#FBEAF0", "note": "听力材料每周四晚发群" }
+]

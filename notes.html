@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>笔记库 · 校园课程工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <div class="brand"><span class="dot"></span>今天</div>
+  <nav class="nav">
+    <a href="index.html">今天</a>
+    <a href="schedule.html">课表</a>
+    <a href="ddl.html">DDL</a>
+    <a href="notes.html" class="active">笔记库</a>
+  </nav>
+  <div class="top-extra" id="weekLabel"></div>
+</div></div>
+
+<div class="wrap">
+  <div class="greeting">
+    <div>
+      <h1>笔记库</h1>
+      <div class="lead">所有存入资料库的笔记都在这里 · 每条可导出 Word</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" onclick="refreshLive()">刷新资料库</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>本周复盘</h2>
+    <div class="review-row" id="reviewStats"></div>
+    <div class="review-text" id="reviewText"></div>
+  </div>
+
+  <div class="card">
+    <h2>全部笔记 <span class="sub" id="countLine"></span></h2>
+    <div id="groups"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="data/data.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const DB = window.DB;
+const now = new Date();
+const DAYS = ["日","一","二","三","四","五","六"];
+const weekOfYear = ()=>{const s=new Date(DB.semester_start);const w=Math.floor((now-s)/86400000/7)+1;return w<1?0:w;};
+const curWeek = weekOfYear();
+
+document.getElementById("weekLabel").textContent = "第 "+curWeek+" 周";
+document.getElementById("dateLine") && (document.getElementById("dateLine").textContent = now.getFullYear()+" 年 "+(now.getMonth()+1)+" 月 "+now.getDate()+" 日 · 星期"+DAYS[now.getDay()]);
+
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600);}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function copy(text,ok){navigator.clipboard.writeText(text).then(()=>toast(ok)).catch(()=>{window.prompt("复制失败，请手动复制：",text);});}
+
+let allNotes = [];
+function buildList(){
+  const groups = {};
+  allNotes.forEach(n=>{ (groups[n.course]=groups[n.course]||[]).push(n); });
+  const count = allNotes.length;
+  document.getElementById("countLine").textContent = count+" 条 · 来自 data/notes.json";
+  const groupsEl = document.getElementById("groups");
+  if(!count){ groupsEl.innerHTML = '<div class="empty">笔记库还是空的。去课程资料库写笔记，点「存入资料库」就会出现在这里</div>'; return; }
+  let html = "";
+  Object.keys(groups).forEach(name=>{
+    const c = DB.courses.find(x=>x.name===name||x.id===name);
+    const notes = groups[name].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+    html += '<div class="note-group"><div class="gh"><span class="dots" style="background:'+(c?c.color:"#5B8DEF")+'"></span>'+
+      '<span style="font-weight:500">'+escapeHtml(name)+'</span><span class="sub" style="color:#A8AEB8;font-size:12px">'+notes.length+' 条</span>'+
+      (c?'<a href="course.html?id='+encodeURIComponent(c.id)+'" style="margin-left:auto;font-size:12px;color:#185FA5">进入资料库 →</a>':'')+'</div>'+
+      notes.map(n=>{
+        const isLocal = !!n.local;
+        const e = JSON.stringify(n).replace(/"/g,"&quot;");
+        return '<div class="note-card'+(isLocal?" local":"")+'"><div class="nc-head">'+
+          '<span class="badge '+(isLocal?"local":"ok")+'">'+(isLocal?"本地待同步":"资料库")+'</span>'+
+          '<span class="nc-date">'+(n.date||"")+' · 第 '+(n.week||"-")+' 周</span></div>'+
+          '<div class="nc-body">'+escapeHtml(n.content)+'</div>'+
+          '<div class="nc-tools">'+
+          (isLocal?'<button class="btn small primary" onclick="saveLocalNote('+e+')">存入资料库</button>':'')+
+          '<button class="btn small" onclick="exportOne('+e+')">导出 Word</button></div></div>';
+      }).join("")+'</div>';
+  });
+  groupsEl.innerHTML = html;
+}
+
+function exportOne(n){
+  NOTE_LIB.exportDocx(n.course+"-"+n.date+"-笔记", n.content).then(kind=>toast(kind==="docx"?"Word 已生成（.docx）":"Word 已生成（.doc 兼容格式）"));
+}
+window.exportOne = exportOne;
+
+async function saveLocalNote(n){
+  const dir = await NOTE_LIB.getDir();
+  if(!dir){ toast("未授权过文件夹，请先授权（见下）"); return; }
+  const res = await NOTE_LIB.saveNote({id:n.id||("n"+Date.now()), date:n.date, course:n.course, week:n.week, content:n.content});
+  if(res.ok){
+    const synced = JSON.parse(localStorage.getItem("today-synced-notes")||"[]").filter(x=>!(x.course===n.course&&x.date===n.date&&x.content===n.content));
+    localStorage.setItem("today-synced-notes",JSON.stringify(synced));
+    toast("已存入资料库 ✓");
+    await refreshLive();
+  }
+}
+window.saveLocalNote = saveLocalNote;
+
+async function refreshLive(){
+  const live = await NOTE_LIB.readNotesLive();
+  if(live){
+    allNotes = live;
+    toast("已从 data/notes.json 刷新 ✓");
+  }else{
+    allNotes = DB.notes.slice();
+  }
+  const local = JSON.parse(localStorage.getItem("today-synced-notes")||"[]");
+  local.forEach(n=>{ if(!allNotes.some(x=>x.course===n.course&&x.date===n.date&&x.content===n.content)) allNotes.push({...n,local:true}); });
+  buildList();
+}
+window.refreshLive = refreshLive;
+
+/* ===== 本周复盘（不变） ===== */
+const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay()+1); weekStart.setHours(0,0,0,0);
+const ddls = DB.ddl.filter(d=>d.status==="todo");
+const weekCourses = DB.courses.filter(c=>c.weeks.split("-")[0]<=curWeek && (+c.weeks.split("-")[1]||16)>=curWeek);
+const postponed = DB.ddl.reduce((s,d)=>s+(d.postponed_count||0),0);
+const notesCount = DB.notes.length;
+const qaCount = Object.keys(DB.qa).filter(k=>k!=="待问清单").reduce((s,k)=>s+DB.qa[k].length,0) + (DB.qa["待问清单"]||[]).length;
+const nearest = ddls.sort((a,b)=>new Date(a.due)-new Date(b.due))[0];
+document.getElementById("reviewStats").innerHTML =
+  '<div class="review-item"><div class="num">'+weekCourses.length+'</div><div class="lbl">本周课程</div></div>'+
+  '<div class="review-item"><div class="num">'+ddls.length+'</div><div class="lbl">待办 DDL</div></div>'+
+  '<div class="review-item"><div class="num">'+postponed+'</div><div class="lbl">累计延期</div></div>'+
+  '<div class="review-item"><div class="num">'+notesCount+'</div><div class="lbl">笔记条数</div></div>'+
+  '<div class="review-item"><div class="num">'+qaCount+'</div><div class="lbl">问答沉淀</div></div>';
+document.getElementById("reviewText").textContent =
+  "第 "+curWeek+" 周小结："+weekCourses.length+" 门课正常推进，"+
+  (nearest ? "最近 DDL 是「"+nearest.title+"」（还剩 "+Math.max(0,Math.ceil((new Date(nearest.due)-now)/86400000))+" 天），建议本周内处理" : "暂无待办 DDL，状态良好")+
+  "。笔记已沉淀 "+notesCount+" 条，问答沉淀 "+qaCount+" 条。下周继续加油！";
+
+refreshLive();
+</script>
+</body>
+</html>

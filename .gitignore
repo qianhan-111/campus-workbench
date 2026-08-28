@@ -1,0 +1,10 @@
+# 工作台本地隐私与缓存
+.workbuddy/
+.preview/
+_share/
+*.zip
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db
+*.log

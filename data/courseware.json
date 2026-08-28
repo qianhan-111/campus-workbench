@@ -1,0 +1,6 @@
+[
+  { "course": "操作系统", "filename": "第1周-进程与线程.md", "week": 1, "added_at": "2026-08-24", "path": "docs/操作系统/第1周-进程与线程.md", "size": "18 KB" },
+  { "course": "操作系统", "filename": "第2周-调度算法.md", "week": 2, "added_at": "2026-08-28", "path": "docs/操作系统/第2周-调度算法.md", "size": "21 KB" },
+  { "course": "数据结构", "filename": "第1周-绪论与复杂度.md", "week": 1, "added_at": "2026-08-24", "path": "docs/数据结构/第1周-绪论与复杂度.md", "size": "15 KB" },
+  { "course": "高等数学A", "filename": "第1周-函数与极限.md", "week": 1, "added_at": "2026-08-24", "path": "docs/高等数学A/第1周-函数与极限.md", "size": "14 KB" }
+]

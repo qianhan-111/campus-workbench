@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DDL · 校园课程工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <div class="brand"><span class="dot"></span>今天</div>
+  <nav class="nav">
+    <a href="index.html">今天</a>
+    <a href="schedule.html">课表</a>
+    <a href="ddl.html" class="active">DDL</a>
+    <a href="notes.html">笔记</a>
+  </nav>
+  <div class="top-extra" id="weekLabel"></div>
+</div></div>
+
+<div class="wrap">
+  <div class="greeting">
+    <div>
+      <h1>DDL 看板</h1>
+      <div class="lead">红色 ≤3 天 · 琥珀 4-7 天 · 绿色 &gt;7 天；点卡片进入课程资料库，交作业前顺手翻课件</div>
+    </div>
+    <div class="meta" id="dateLine"></div>
+  </div>
+
+  <div class="card">
+    <div class="statbar" id="statbar"></div>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>已完成 <span class="sub">点卡片可查看所属课程</span></h2>
+    <div id="doneList"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="data/data.js"></script>
+<script>
+const DB = window.DB;
+const now = new Date();
+const storeKey = "today-ddl-state";
+const overrides = JSON.parse(localStorage.getItem(storeKey) || "{}");
+
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2200);}
+function saveOverrides(){localStorage.setItem(storeKey, JSON.stringify(overrides));}
+function daysLeft(due){return Math.ceil((new Date(due)-now)/86400000);}
+function level(d){return d<=3?"red":d<=7?"amber":"green";}
+function label(d){return d<0?"已逾期 "+(-d)+" 天":d===0?"今天到期":"还剩 "+d+" 天";}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function courseByRef(ref){return DB.courses.find(c=>c.id===ref||c.name===ref);}
+const weekOfYear = ()=>{const s=new Date(DB.semester_start);const w=Math.floor((now-s)/86400000/7)+1;return w<1?0:w;};
+document.getElementById("weekLabel").textContent = "第 "+weekOfYear()+" 周";
+document.getElementById("dateLine").textContent = now.getFullYear()+" 年 "+(now.getMonth()+1)+" 月 "+now.getDate()+" 日";
+
+const items = DB.ddl.map(d=>({...d, ...(overrides[d.id]||{})}));
+const todo = items.filter(d=>d.status==="todo");
+const done = items.filter(d=>d.status==="done");
+
+const weekStart = new Date(now); weekStart.setDate(now.getDate()-now.getDay()+1); weekStart.setHours(0,0,0,0);
+const weekNew = items.filter(d=>new Date(d.created_at)>=weekStart).length;
+const doneCount = done.length;
+const postponed = items.reduce((s,d)=>s+(d.postponed_count||0),0);
+document.getElementById("statbar").innerHTML =
+  '<div class="stat"><div class="num">'+todo.length+'</div><div class="lbl">待办 DDL</div></div>'+
+  '<div class="stat"><div class="num">'+weekNew+'</div><div class="lbl">本周新增</div></div>'+
+  '<div class="stat"><div class="num">'+doneCount+'</div><div class="lbl">已完成</div></div>'+
+  '<div class="stat"><div class="num">'+postponed+'</div><div class="lbl">累计延期</div></div>';
+
+const cols = [
+  {key:"red",   name:"紧急",  hint:"≤ 3 天"},
+  {key:"amber", name:"临近",  hint:"4-7 天"},
+  {key:"green", name:"稍后",  hint:"> 7 天"}
+];
+const board = document.getElementById("board");
+board.innerHTML = cols.map(col=>{
+  const list = todo.filter(d=>level(daysLeft(d.due))===col.key).sort((a,b)=>new Date(a.due)-new Date(b.due));
+  const card = list.map(d=>ddlCard(d)).join("");
+  return '<div class="board-col"><h3><span class="dots" style="width:8px;height:8px;border-radius:50%;background:var(--'+col.key+')"></span>'+col.name+' <span class="count">'+list.length+' · '+col.hint+'</span></h3>'+
+    (card || '<div class="empty" style="padding:18px 8px;background:#fff;border:1px dashed var(--line);border-radius:10px">暂无</div>')+'</div>';
+}).join("");
+
+function ddlCard(d){
+  const lv = level(daysLeft(d.due));
+  const c = courseByRef(d.course);
+  const nav = c ? "course.html?id="+encodeURIComponent(c.id) : null;
+  return '<div class="ddl-row" '+(nav?'onclick="location.href=\''+nav+'\'"':'')+'>'+
+    '<div class="bar '+lv+'"></div>'+
+    '<div class="main"><div class="title">'+escapeHtml(d.title)+' <span class="tag">'+escapeHtml(d.type)+'</span></div>'+
+    '<div class="meta">'+escapeHtml(d.course)+' · '+d.due.replace("T"," ")+(d.postponed_count?' · 已延期 '+d.postponed_count+' 次':'')+'</div></div>'+
+    '<div class="actions"><span class="chip '+lv+'">'+label(daysLeft(d.due))+'</span>'+
+    '<button class="btn small" onclick="event.stopPropagation();postpone(\''+d.id+'\')">顺延</button>'+
+    '<button class="btn small primary" onclick="event.stopPropagation();finish(\''+d.id+'\')">完成</button></div></div>';
+}
+
+function finish(id){
+  const d = items.find(x=>x.id===id);
+  overrides[id] = {status:"done"};
+  saveOverrides();
+  toast("「"+d.title+"」已完成，辛苦了");
+  location.reload();
+}
+function postpone(id){
+  const d = items.find(x=>x.id===id);
+  const due = new Date(d.due); due.setDate(due.getDate()+1);
+  overrides[id] = {due: due.toISOString().slice(0,16), postponed_count:(d.postponed_count||0)+1};
+  saveOverrides();
+  toast("已顺延到 "+due.toISOString().slice(0,16).replace("T"," ")+"，记得在对话里同步给 WorkBuddy");
+  location.reload();
+}
+
+const dl = document.getElementById("doneList");
+dl.innerHTML = done.length ? done.map(d=>{
+  const c = courseByRef(d.course);
+  const nav = c?"course.html?id="+encodeURIComponent(c.id):null;
+  return '<div class="ddl-row done" '+(nav?'onclick="location.href=\''+nav+'\'"':'')+'>'+
+    '<div class="bar gray"></div><div class="main"><div class="title">'+escapeHtml(d.title)+'</div>'+
+    '<div class="meta">'+escapeHtml(d.course)+' · '+d.due.replace("T"," ")+' 完成</div></div></div>';
+}).join("") : '<div class="empty">还没有完成的 DDL，点「完成」就会出现在这里</div>';
+</script>
+</body>
+</html>

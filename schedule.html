@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>课表 · 校园课程工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <div class="brand"><span class="dot"></span>今天</div>
+  <nav class="nav">
+    <a href="index.html">今天</a>
+    <a href="schedule.html" class="active">课表</a>
+    <a href="ddl.html">DDL</a>
+    <a href="notes.html">笔记</a>
+  </nav>
+  <div class="top-extra" id="weekLabel"></div>
+</div></div>
+
+<div class="wrap">
+  <div class="greeting">
+    <div>
+      <h1>周课表</h1>
+      <div class="lead">点课程进资料库 · 悬停点 ✎ 编辑 · 改完点「同步到资料库」写入数据文件</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" onclick="openModal()">＋ 添加课程</button>
+      <button class="btn primary" onclick="syncCourses()">同步到资料库</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="week-scroll">
+      <div class="week-grid" id="weekGrid"></div>
+    </div>
+    <div class="week-list" id="weekList"></div>
+  </div>
+</div>
+
+<div class="modal-mask" id="mask" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">编辑课程</h3>
+    <div class="form-row">
+      <div class="full"><label>课程名称</label><input id="f-name" placeholder="如：大学物理"></div>
+    </div>
+    <div class="form-row">
+      <div><label>星期</label>
+        <select id="f-weekday">
+          <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+          <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option>
+        </select>
+      </div>
+      <div><label>课程类别</label>
+        <select id="f-category"><option>必修</option><option>选修</option><option>实验</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div><label>开始时间</label><input type="time" id="f-start" value="08:00"></div>
+      <div><label>结束时间</label><input type="time" id="f-end" value="09:40"></div>
+    </div>
+    <div class="form-row">
+      <div><label>教室</label><input id="f-room" placeholder="如：教三 402"></div>
+      <div><label>教师</label><input id="f-teacher" placeholder="如：张伟"></div>
+    </div>
+    <div class="form-row">
+      <div><label>周次范围</label><input id="f-weeks" placeholder="如：1-16"></div>
+      <div><label>备注</label><input id="f-note" placeholder="选填"></div>
+    </div>
+    <div class="foot">
+      <button class="btn ghost" id="delBtn" onclick="delCourse()">删除课程</button>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" onclick="saveCourse()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="data/data.js"></script>
+<script>
+const DB = window.DB;
+const now = new Date();
+const DAYS = ["周一","周二","周三","周四","周五","周六","周日"];
+const SLOTS = [
+  {label:"1-2节", t:"08:00", slot:0},
+  {label:"3-4节", t:"10:00", slot:1},
+  {label:"5-6节", t:"14:00", slot:2},
+  {label:"7-8节", t:"16:00", slot:3},
+  {label:"9-10节", t:"19:00", slot:4}
+];
+const hourToSlot = {8:0,10:1,14:2,16:3,19:4};
+const PALETTE = ["#E6F1FB","#E1F5EE","#FAEEDA","#FBEAF0","#EAF3DE","#EEEDFE","#FCEBEB"];
+const today = now.getDay() === 0 ? 7 : now.getDay();
+const weekOfYear = ()=>{const s=new Date(DB.semester_start);const w=Math.floor((now-s)/86400000/7)+1;return w<1?0:w;};
+const editKey = "today-course-edits";
+let courses = JSON.parse(JSON.stringify(DB.courses));
+JSON.parse(localStorage.getItem(editKey)||"[]").forEach(e=>{const i=courses.findIndex(c=>c.id===e.id);if(i>=0)courses[i]={...courses[i],...e};else courses.push(e);});
+
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2400);}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+document.getElementById("weekLabel").textContent = "第 "+weekOfYear()+" 周";
+document.getElementById("dateLine") && (document.getElementById("dateLine").textContent = now.getFullYear()+" 年 "+(now.getMonth()+1)+" 月 "+now.getDate()+" 日");
+
+function chipHtml(c){
+  return '<a class="course-chip" style="background:'+c.color+';color:#3A4150" href="course.html?id='+encodeURIComponent(c.id)+'">'+
+    escapeHtml(c.name)+'<div class="r">'+escapeHtml(c.room)+'</div>'+
+    '<button class="chip-edit" onclick="event.preventDefault();event.stopPropagation();openModal(\''+encodeURIComponent(c.id)+'\')">✎</button></a>';
+}
+
+function render(){
+  let grid = '<div class="wt"></div>';
+  DAYS.forEach((d,i)=>grid += '<div class="wh">'+(i+1===today?'<span style="color:#185FA5">'+d+'</span>':d)+'</div>');
+  SLOTS.forEach(sl=>{
+    grid += '<div class="wt">'+sl.label+'<br>'+sl.t+'</div>';
+    for(let d=1;d<=7;d++){
+      const cells = courses.filter(c=>c.weekday===d && hourToSlot[+c.start.slice(0,2)]===sl.slot);
+      grid += '<div class="week-cell">'+cells.map(chipHtml).join("")+'</div>';
+    }
+  });
+  document.getElementById("weekGrid").innerHTML = grid;
+
+  let list = "";
+  DAYS.forEach((d,i)=>{
+    const cs = courses.filter(c=>c.weekday===i+1).sort((a,b)=>a.start.localeCompare(b.start));
+    if(!cs.length) return;
+    list += '<div class="note-group"><div class="gh"><span class="dots" style="background:#5B8DEF"></span><span style="font-weight:500">'+d+'</span></div>';
+    list += cs.map(c=>'<div class="file-row" style="cursor:pointer" onclick="location.href=\'course.html?id='+encodeURIComponent(c.id)+'\'">'+
+      '<div class="ic">课</div><div><div class="fn">'+escapeHtml(c.name)+'</div><div class="fm">'+c.start+' – '+c.end+' · '+escapeHtml(c.room)+' · '+escapeHtml(c.teacher)+'</div></div>'+
+      '<button class="btn small" style="margin-left:auto" onclick="event.stopPropagation();openModal(\''+encodeURIComponent(c.id)+'\')">编辑</button></div>').join("");
+    list += '</div>';
+  });
+  document.getElementById("weekList").innerHTML = list || '<div class="empty">本周暂无课程，点「添加课程」试试</div>';
+}
+render();
+
+let editingId = null;
+function openModal(id){
+  const c = id ? courses.find(x=>x.id===decodeURIComponent(id)) : null;
+  editingId = c ? c.id : null;
+  document.getElementById("modalTitle").textContent = c ? "编辑课程" : "添加课程";
+  document.getElementById("f-name").value = c?c.name:"";
+  document.getElementById("f-weekday").value = c?c.weekday:1;
+  document.getElementById("f-category").value = c?c.category:"必修";
+  document.getElementById("f-start").value = c?c.start:"08:00";
+  document.getElementById("f-end").value = c?c.end:"09:40";
+  document.getElementById("f-room").value = c?c.room:"";
+  document.getElementById("f-teacher").value = c?c.teacher:"";
+  document.getElementById("f-weeks").value = c?(c.weeks||"").replace("周",""):"1-16";
+  document.getElementById("f-note").value = c?(c.note||""):"";
+  document.getElementById("delBtn").style.visibility = c?"visible":"hidden";
+  document.getElementById("mask").classList.add("show");
+}
+function closeModal(){document.getElementById("mask").classList.remove("show");}
+function saveCourse(){
+  const name = document.getElementById("f-name").value.trim();
+  if(!name){toast("课程名不能为空");return;}
+  const rec = {
+    id: editingId || ("c"+Date.now()),
+    name,
+    weekday: +document.getElementById("f-weekday").value,
+    category: document.getElementById("f-category").value,
+    start: document.getElementById("f-start").value,
+    end: document.getElementById("f-end").value,
+    room: document.getElementById("f-room").value.trim(),
+    teacher: document.getElementById("f-teacher").value.trim(),
+    weeks: (document.getElementById("f-weeks").value.trim()||"1-16")+"周",
+    note: document.getElementById("f-note").value.trim(),
+    color: PALETTE[(courses.length+1)%PALETTE.length]
+  };
+  const i = courses.findIndex(x=>x.id===rec.id);
+  if(i>=0) courses[i]=rec; else courses.push(rec);
+  const edits = JSON.parse(localStorage.getItem(editKey)||"[]");
+  const j = edits.findIndex(x=>x.id===rec.id);
+  if(j>=0) edits[j]=rec; else edits.push(rec);
+  localStorage.setItem(editKey, JSON.stringify(edits));
+  closeModal(); render();
+  toast("已保存（本地生效）。点「同步到资料库」写入数据文件");
+}
+function delCourse(){
+  if(!editingId) return;
+  courses = courses.filter(c=>c.id!==editingId);
+  const edits = JSON.parse(localStorage.getItem(editKey)||"[]").filter(e=>e.id!==editingId);
+  localStorage.setItem(editKey, JSON.stringify(edits));
+  closeModal(); render();
+  toast("已删除课程");
+}
+function syncCourses(){
+  const txt = "请把「今天」工作台的课表更新为以下内容（写入 data/courses.json 并重新生成 data/data.js）：\n"+
+    JSON.stringify(courses.map(c=>({id:c.id,name:c.name,weekday:c.weekday,start:c.start,end:c.end,room:c.room,teacher:c.teacher,weeks:c.weeks,category:c.category,color:c.color,note:c.note||""})),null,2);
+  navigator.clipboard.writeText(txt).then(()=>toast("课表已复制，粘贴给 WorkBuddy 即写入资料库")).catch(()=>{window.prompt("复制失败，请手动复制：",txt);});
+}
+</script>
+</body>
+</html>

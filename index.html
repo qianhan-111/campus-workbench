@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今天 · 校园课程工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <div class="brand"><span class="dot"></span>今天</div>
+  <nav class="nav">
+    <a href="index.html" class="active">今天</a>
+    <a href="schedule.html">课表</a>
+    <a href="ddl.html">DDL</a>
+    <a href="notes.html">笔记</a>
+  </nav>
+  <div class="top-extra" id="weekLabel"></div>
+</div></div>
+
+<div class="wrap">
+  <div class="greeting">
+    <div>
+      <h1 id="hello"></h1>
+      <div class="lead" id="summary"></div>
+    </div>
+    <div class="meta" id="dateLine"></div>
+  </div>
+
+  <div class="card" id="todayCard">
+    <h2>今天的课 <span class="sub" id="todayCount"></span></h2>
+    <div class="tl" id="timeline"></div>
+  </div>
+
+  <div class="card">
+    <h2>最近的 DDL <span class="sub">点击卡片进入对应课程资料库</span></h2>
+    <div id="ddlList"></div>
+    <div class="more"><a href="ddl.html" class="btn ghost">查看全部 DDL →</a></div>
+  </div>
+
+  <div class="card">
+    <h2>说一句话，交给 WorkBuddy <span class="sub">不用填任何表单</span></h2>
+    <button class="btn primary block" onclick="copyAddPrompt()">＋ 添加课程 / DDL / 课件</button>
+    <div class="lead" style="margin-top:10px;text-align:center">例如：「操作系统实验报告 下周三晚上 11 点交」</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="data/data.js"></script>
+<script>
+const DB = window.DB;
+const WEEK = ["日","一","二","三","四","五","六"];
+const now = new Date();
+const today = now.getDay() === 0 ? 7 : now.getDay();
+
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2200);}
+function copy(text, ok){navigator.clipboard.writeText(text).then(()=>toast(ok)).catch(()=>{window.prompt("复制失败，请手动复制：",text);});}
+function daysLeft(due){return Math.ceil((new Date(due)-now)/86400000);}
+function ddlLevel(d){return d<=3?"red":d<=7?"amber":"green";}
+function ddlLabel(d){return d<0?"已逾期 "+(-d)+" 天":d===0?"今天到期":"还剩 "+d+" 天";}
+function weekOfYear(){const s=new Date(DB.semester_start);const w=Math.floor((now-s)/86400000/7)+1;return w<1?0:w;}
+const courseEdits = JSON.parse(localStorage.getItem("today-course-edits")||"[]");
+courseEdits.forEach(e=>{const i=DB.courses.findIndex(c=>c.id===e.id);if(i>=0)DB.courses[i]={...DB.courses[i],...e};else DB.courses.push(e);});
+function courseById(ref){return DB.courses.find(c=>c.id===ref||c.name===ref);}
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+document.getElementById("dateLine").textContent = now.getFullYear()+" 年 "+(now.getMonth()+1)+" 月 "+now.getDate()+" 日 · 星期"+WEEK[today]+" · 第 "+weekOfYear()+" 周";
+
+const todays = DB.courses.filter(c=>c.weekday===today).sort((a,b)=>a.start.localeCompare(b.start));
+const todos = DB.ddl.filter(d=>d.status==="todo").sort((a,b)=>new Date(a.due)-new Date(b.due));
+const nearest = todos[0]?daysLeft(todos[0].due):null;
+const h = now.getHours();
+document.getElementById("hello").textContent = h<6?"夜深了":(h<12?"早上好":(h<18?"下午好":"晚上好"));
+document.getElementById("summary").textContent = "今天有 "+todays.length+" 节课"+(nearest!==null?"，最近的 DDL "+ddlLabel(nearest):"，暂无 DDL");
+document.getElementById("todayCount").textContent = "共 "+todays.length+" 节";
+document.getElementById("weekLabel").textContent = "第 "+weekOfYear()+" 周";
+
+function pad(n){return String(n).padStart(2,"0");}
+function hhmm(d){return pad(d.getHours())+":"+pad(d.getMinutes());}
+const tl = document.getElementById("timeline");
+if(todays.length===0){
+  tl.innerHTML = '<div class="empty">今天没课，去图书馆吧</div>';
+}else{
+  tl.innerHTML = todays.map(c=>{
+    const start=new Date(), end=new Date();
+    const [sh,sm]=c.start.split(":"); const [eh,em]=c.end.split(":");
+    start.setHours(+sh,+sm,0,0); end.setHours(+eh,+em,0,0);
+    const state = now>end?"past":(now>=start?"live":"");
+    return '<div class="tl-item '+state+'" onclick="location.href=\'course.html?id='+encodeURIComponent(c.id)+'\'">'+
+      '<div class="row"><span class="name">'+escapeHtml(c.name)+'</span>'+
+      '<span class="chip '+(c.category==="必修"?"gray":"gray")+'">'+escapeHtml(c.category)+'</span>'+
+      (state==="live"?'<span class="chip red">进行中</span>':(state==="past"?'<span class="chip gray">已结束</span>':''))+
+      '<span class="goto">进入资料库 →</span></div>'+
+      '<div class="row" style="margin-top:6px"><span class="time">'+c.start+' – '+c.end+'</span>'+
+      '<span class="room">'+escapeHtml(c.room)+' · '+escapeHtml(c.teacher)+'</span></div>'+
+      '</div>';
+  }).join("");
+}
+
+const dl = document.getElementById("ddlList");
+const top5 = todos.slice(0,5);
+if(top5.length===0){
+  dl.innerHTML = '<div class="empty">没有待办 DDL，干得漂亮</div>';
+}else{
+  dl.innerHTML = top5.map(d=>{
+    const dlv=daysLeft(d.due);
+    const c = courseById(d.course);
+    const nav = c ? "course.html?id="+encodeURIComponent(c.id) : "ddl.html";
+    return '<div class="ddl-row" onclick="location.href=\''+nav+'\'">'+
+      '<div class="bar '+ddlLevel(dlv)+'"></div>'+
+      '<div class="main"><div class="title">'+escapeHtml(d.title)+' <span class="tag">'+escapeHtml(d.type)+'</span></div>'+
+      '<div class="meta">'+escapeHtml(d.course)+' · '+d.due.replace("T"," ")+'</div></div>'+
+      '<div class="actions"><span class="chip '+ddlLevel(dlv)+'">'+ddlLabel(dlv)+'</span></div>'+
+      '</div>';
+  }).join("");
+}
+
+function copyAddPrompt(){
+  const txt = "帮我在「今天」工作台里加一条：\n- 课程：<课程名，周几，第几节，教室，教师>（或 DDL：<任务名> <截止时间> <所属课程>，或课件：<把文件放进 <课程名>>）";
+  copy(txt,"已复制录入模板，粘贴到对话里填上内容即可");
+}
+</script>
+</body>
+</html>
