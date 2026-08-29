@@ -117,6 +117,7 @@ else{
     '<div class="meta">'+escapeHtml(course.teacher)+' · '+escapeHtml(course.room)+' · 第 '+escapeHtml(course.weeks)+' 周 · '+escapeHtml(course.category)+
     (course.note?'<br>'+escapeHtml(course.note):'')+'</div></div>'+
     '<div class="stats"><span class="chip gray">课件 '+cw.length+'</span><span class="chip gray">笔记 '+myNotes.length+'</span><span class="chip gray">问答 '+qaList.length+'</span></div>';
+  document.querySelector(".course-head").style.setProperty("--strip", course.color || "#4C82EF");
 
   const box = document.getElementById("hintBox");
   if(weekOfYear()===0){

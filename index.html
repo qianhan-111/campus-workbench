@@ -22,7 +22,7 @@
   <div class="greeting">
     <div>
       <h1 id="hello"></h1>
-      <div class="lead" id="summary"></div>
+      <div class="hero-chips" id="heroChips"></div>
     </div>
     <div class="meta" id="dateLine"></div>
   </div>
@@ -72,7 +72,13 @@ const todos = DB.ddl.filter(d=>d.status==="todo").sort((a,b)=>new Date(a.due)-ne
 const nearest = todos[0]?daysLeft(todos[0].due):null;
 const h = now.getHours();
 document.getElementById("hello").textContent = h<6?"夜深了":(h<12?"早上好":(h<18?"下午好":"晚上好"));
-document.getElementById("summary").textContent = "今天有 "+todays.length+" 节课"+(nearest!==null?"，最近的 DDL "+ddlLabel(nearest):"，暂无 DDL");
+const nearestChip = nearest===null?'<span class="hero-chip">DDL <b class="hl-green">暂无</b></span>'
+  : '<span class="hero-chip">最近 DDL <b class="hl-red">'+ddlLabel(nearest)+'</b></span>';
+document.getElementById("heroChips").innerHTML =
+  '<span class="hero-chip">今天 <b class="hl-blue">'+todays.length+' 节课</b></span>'+
+  nearestChip+
+  '<span class="hero-chip">第 <b>'+weekOfYear()+'</b> 周</span>'+
+  '<span class="hero-chip">待办 <b class="hl-blue">'+todos.length+'</b> 项</span>';
 document.getElementById("todayCount").textContent = "共 "+todays.length+" 节";
 document.getElementById("weekLabel").textContent = "第 "+weekOfYear()+" 周";
 
