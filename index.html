@@ -10,32 +10,31 @@
 <div class="topbar"><div class="topbar-inner">
   <div class="brand"><span class="dot"></span>今天</div>
   <nav class="nav">
-    <a href="index.html" class="active">今天</a>
-    <a href="schedule.html">课表</a>
-    <a href="ddl.html">DDL</a>
-    <a href="notes.html">笔记</a>
+    <a href="#" data-go="home" onclick="return go('home')" class="active">今天</a>
+    <a href="#" data-go="schedule" onclick="return go('schedule')">课表</a>
+    <a href="#" data-go="ddl" onclick="return go('ddl')">DDL</a>
+    <a href="#" data-go="notes" onclick="return go('notes')">笔记</a>
   </nav>
   <div class="top-extra" id="weekLabel"></div>
 </div></div>
-
-<div class="wrap">
+<div id="view-home">
   <div class="greeting">
     <div>
       <h1 id="hello"></h1>
-      <div class="hero-chips" id="heroChips"></div>
+      <div class="hero-chips" id="heroChips" data-sp-bindable="database" data-sp-database-id="krVlbHBrfM1JF150rYcIzc"></div>
     </div>
     <div class="meta" id="dateLine"></div>
   </div>
 
   <div class="card" id="todayCard">
-    <h2>今天的课 <span class="sub" id="todayCount"></span></h2>
-    <div class="tl" id="timeline"></div>
+    <h2>今天的课 <span class="sub" id="todayCount" data-sp-bindable="database" data-sp-database-id="krVlbHBrfM1JF150rYcIzc"></span></h2>
+    <div class="tl" id="timeline" data-sp-bindable="database" data-sp-database-id="krVlbHBrfM1JF150rYcIzc"></div>
   </div>
 
   <div class="card">
-    <h2>最近的 DDL <span class="sub">点击卡片进入对应课程资料库</span></h2>
-    <div id="ddlList"></div>
-    <div class="more"><a href="ddl.html" class="btn ghost">查看全部 DDL →</a></div>
+    <h2>最近的 DDL <span class="sub">点「✓ 完成」直接销账（5 秒内可撤销）· 点卡片进课程资料库</span></h2>
+    <div id="ddlList" data-sp-bindable="database" data-sp-database-id="wqok9b87n41XuCOAO0fmw2"></div>
+    <div class="more"><a href="#" onclick="return quickAddDdl()" class="btn ghost">＋ 添加一条 DDL</a><a href="#" onclick="return go('ddl')" class="btn ghost">查看全部 DDL →</a></div>
   </div>
 
   <div class="card">
@@ -44,88 +43,218 @@
     <div class="lead" style="margin-top:10px;text-align:center">例如：「操作系统实验报告 下周三晚上 11 点交」</div>
   </div>
 </div>
+<div id="view-schedule" hidden>
+  <div class="greeting">
+    <div>
+      <h1>周课表</h1>
+      <div class="lead">点课程进资料库 · 悬停点 ✎ 编辑 · 单双周与周次范围不符的课会自动隐藏（编辑课程里可设置）</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" onclick="openModal()">＋ 添加课程</button>
+      <button class="btn primary" onclick="refreshAll()">刷新线上</button>
+    </div>
+  </div>
 
+  <div class="card">
+    <div class="week-scroll">
+      <div class="week-grid" id="weekGrid" data-sp-bindable="database" data-sp-database-id="krVlbHBrfM1JF150rYcIzc"></div>
+    </div>
+    <div class="week-list" id="weekList" data-sp-bindable="database" data-sp-database-id="krVlbHBrfM1JF150rYcIzc"></div>
+  </div>
+<div class="modal-mask" id="mask" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">编辑课程</h3>
+    <div class="form-row">
+      <div class="full"><label>课程名称</label><input id="f-name" placeholder="如：大学物理"></div>
+    </div>
+    <div class="form-row">
+      <div><label>星期</label>
+        <select id="f-weekday">
+          <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+          <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option>
+        </select>
+      </div>
+      <div><label>课程类别</label>
+        <select id="f-category"><option>必修</option><option>选修</option><option>实验</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div><label>开始时间</label><input type="time" id="f-start" value="08:00"></div>
+      <div><label>结束时间</label><input type="time" id="f-end" value="09:40"></div>
+    </div>
+    <div class="form-row">
+      <div><label>教室</label><input id="f-room" placeholder="如：教三 402"></div>
+      <div><label>教师</label><input id="f-teacher" placeholder="如：张伟"></div>
+    </div>
+    <div class="form-row">
+      <div><label>周次范围</label><input id="f-weeks" placeholder="如：1-16"></div>
+      <div><label>单双周</label>
+        <select id="f-parity">
+          <option>每周</option><option>单周</option><option>双周</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="full"><label>备注</label><input id="f-note" placeholder="选填"></div>
+    </div>
+    <div class="foot">
+      <button class="btn ghost" id="delBtn" onclick="delCourse()">删除课程</button>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" onclick="saveCourse()">保存</button>
+    </div>
+  </div>
+</div></div>
+<div id="view-ddl" hidden>
+  <div class="greeting">
+    <div>
+      <h1>DDL 看板</h1>
+      <div class="lead">红色 ≤3 天 · 琥珀 4-7 天 · 绿色 &gt;7 天；点卡片进入课程资料库，交作业前顺手翻课件</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" onclick="openDdlModal()">＋ 添加 DDL</button>
+      <div class="meta" id="dateLine"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="statbar" id="statbar" data-sp-bindable="database" data-sp-database-id="wqok9b87n41XuCOAO0fmw2"></div>
+  </div>
+
+  <div class="board" id="board" data-sp-bindable="database" data-sp-database-id="wqok9b87n41XuCOAO0fmw2"></div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>已完成 <span class="sub">点卡片可查看所属课程</span></h2>
+    <div id="doneList" data-sp-bindable="database" data-sp-database-id="wqok9b87n41XuCOAO0fmw2"></div>
+  </div>
+</div>
+<div id="view-notes" hidden>
+  <div class="greeting">
+    <div>
+      <h1>笔记库</h1>
+      <div class="lead">笔记云端同步，换设备数据都在 · 每条可导出 Word</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" onclick="refreshLive()">刷新资料库</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>本周复盘</h2>
+    <div class="review-row" id="reviewStats" data-sp-bindable="database" data-sp-database-id="yrJ0J8V2PGC9BYL5DRXzPj"></div>
+    <div class="review-text" id="reviewText"></div>
+  </div>
+
+  <div class="card">
+    <h2>全部笔记 <span class="sub" id="countLine" data-sp-bindable="database" data-sp-database-id="yrJ0J8V2PGC9BYL5DRXzPj"></span></h2>
+    <div id="groups" data-sp-bindable="database" data-sp-database-id="yrJ0J8V2PGC9BYL5DRXzPj"></div>
+  </div>
+</div>
+<div id="view-course" hidden><div class="back-line" style="margin:14px 0 -4px"><a href="#" onclick="return go('schedule')" style="color:#7A8291;font-size:13px">← 返回课表</a></div>
+  <div class="course-head" id="head" data-sp-bindable="database" data-sp-database-id="krVlbHBrfM1JF150rYcIzc"></div>
+  <div id="hintBox"></div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+      <h2 style="margin:0">课程笔记 <span class="sub">所见即所得 · 自动保存 · 可拖拽调大</span></h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="note-date" id="noteDate"></span>
+        <button class="btn small" onclick="exportCurrent()">导出 Word</button>
+        <button class="btn small primary" onclick="saveNote()">存入资料库</button>
+      </div>
+    </div>
+    <div class="notion-toolbar" id="toolbar">
+      <button class="tb" title="标题1" onclick="fmtBlock('H1')">H1</button>
+      <button class="tb" title="标题2" onclick="fmtBlock('H2')">H2</button>
+      <button class="tb" title="标题3" onclick="fmtBlock('H3')">H3</button>
+      <span class="sep"></span>
+      <button class="tb" title="加粗" onclick="fmtCmd('bold')"><b>B</b></button>
+      <button class="tb" title="行内代码" onclick="fmtCodeInline()">`</button>
+      <span class="sep"></span>
+      <button class="tb" title="无序列表" onclick="fmtCmd('insertUnorderedList')">•</button>
+      <button class="tb" title="有序列表" onclick="fmtCmd('insertOrderedList')">1.</button>
+      <button class="tb" title="待办" onclick="fmtTodo()">☑</button>
+      <button class="tb" title="引用" onclick="fmtBlock('blockquote')">"</button>
+      <button class="tb" title="代码块" onclick="fmtBlock('pre')">code</button>
+      <span class="sep"></span>
+      <button class="tb" title="标记没听懂" onclick="fmtUnclear()">❓</button>
+    </div>
+    <div class="editor-panel" id="editorPanel">
+      <div class="note-editor" id="note" contenteditable="true" spellcheck="false"></div>
+      <div class="resize-handle" id="resizeHandle" title="拖拽调整高度"></div>
+      <div class="foot" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px">
+        <span class="save-state" id="saveState"></span>
+        <span class="muted">「存入资料库」实时写入线上资料库，换设备数据都在</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="course-layout">
+    <div class="card" style="margin:0">
+      <h2>课件库 <span class="sub">拖文件进对话说「放进这门课」即可归档</span><button class="btn small" style="margin-left:auto" onclick="return copyCoursewarePrompt()">＋ 导入课件</button></h2>
+      <div id="files" data-sp-bindable="database" data-sp-database-id="wmM5yZdgkNm35GAuIDFU1o"></div>
+    </div>
+    <div class="card" style="margin:0">
+      <h2>AI 陪读问答 <span class="sub">带课件上下文，问完沉淀成重点本</span></h2>
+      <div class="qa-q" id="quickQs"></div>
+      <div class="editor" style="margin-bottom:14px">
+        <textarea id="qInput" rows="2" placeholder="输入你的问题，例如：第 2 周课件的调度算法，帮我对比一下…"></textarea>
+        <div class="foot">
+          <span class="save-state">问题带着课程上下文复制，粘贴到 WorkBuddy 对话即可</span>
+          <button class="btn small primary" onclick="ask()">提问</button>
+        </div>
+      </div>
+      <h3 style="font-size:13px;font-weight:500;margin-bottom:8px">待问清单</h3>
+      <div id="pending" data-sp-bindable="database" data-sp-database-id="Y5pDUPZmwBZS5A9fyiAQY0"></div>
+      <h3 style="font-size:13px;font-weight:500;margin:14px 0 8px">问答历史</h3>
+      <div id="history" data-sp-bindable="database" data-sp-database-id="Y5pDUPZmwBZS5A9fyiAQY0"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h2>本课已存笔记 <span class="sub">来自资料库 data/notes.json</span></h2>
+    <div id="savedNotes" data-sp-bindable="database" data-sp-database-id="yrJ0J8V2PGC9BYL5DRXzPj"></div>
+  </div>
+</div>
+<div class="modal-mask" id="ddlMask" onclick="if(event.target===this)closeDdlModal()">
+  <div class="modal">
+    <h3>添加 DDL</h3>
+    <div class="form-row">
+      <div class="full"><label>任务</label><input id="d-title" placeholder="如：操作系统实验报告（实验二）"></div>
+    </div>
+    <div class="form-row">
+      <div><label>所属课程</label><select id="d-course"></select></div>
+      <div><label>类型</label><select id="d-type"><option>作业</option><option>实验</option><option>小组</option><option>其他</option></select></div>
+    </div>
+    <div class="form-row">
+      <div><label>截止时间</label><input type="datetime-local" id="d-due"></div>
+      <div><label>预计分钟</label><input type="number" id="d-min" value="60" min="0" step="10"></div>
+    </div>
+    <div class="foot">
+      <span class="muted" style="margin-right:auto;font-size:12px;color:#A8AEB8">保存即写入线上资料库，换设备都在</span>
+      <button class="btn" onclick="closeDdlModal()">取消</button>
+      <button class="btn primary" onclick="saveDdl()">保存</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
-<script src="data/data.js"></script>
+<script src="assets/db.js"></script>
+<script src="assets/common.js"></script>
+<script src="assets/app.js"></script>
+
 <script>
-const DB = window.DB;
-const WEEK = ["日","一","二","三","四","五","六"];
-const now = new Date();
-const today = now.getDay() === 0 ? 7 : now.getDay();
-
-function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2200);}
-function copy(text, ok){navigator.clipboard.writeText(text).then(()=>toast(ok)).catch(()=>{window.prompt("复制失败，请手动复制：",text);});}
-function daysLeft(due){return Math.ceil((new Date(due)-now)/86400000);}
-function ddlLevel(d){return d<=3?"red":d<=7?"amber":"green";}
-function ddlLabel(d){return d<0?"已逾期 "+(-d)+" 天":d===0?"今天到期":"还剩 "+d+" 天";}
-function weekOfYear(){const s=new Date(DB.semester_start);const w=Math.floor((now-s)/86400000/7)+1;return w<1?0:w;}
-const courseEdits = JSON.parse(localStorage.getItem("today-course-edits")||"[]");
-courseEdits.forEach(e=>{const i=DB.courses.findIndex(c=>c.id===e.id);if(i>=0)DB.courses[i]={...DB.courses[i],...e};else DB.courses.push(e);});
-function courseById(ref){return DB.courses.find(c=>c.id===ref||c.name===ref);}
-
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-
-document.getElementById("dateLine").textContent = now.getFullYear()+" 年 "+(now.getMonth()+1)+" 月 "+now.getDate()+" 日 · 星期"+WEEK[today]+" · 第 "+weekOfYear()+" 周";
-
-const todays = DB.courses.filter(c=>c.weekday===today).sort((a,b)=>a.start.localeCompare(b.start));
-const todos = DB.ddl.filter(d=>d.status==="todo").sort((a,b)=>new Date(a.due)-new Date(b.due));
-const nearest = todos[0]?daysLeft(todos[0].due):null;
-const h = now.getHours();
-document.getElementById("hello").textContent = h<6?"夜深了":(h<12?"早上好":(h<18?"下午好":"晚上好"));
-const nearestChip = nearest===null?'<span class="hero-chip">DDL <b class="hl-green">暂无</b></span>'
-  : '<span class="hero-chip">最近 DDL <b class="hl-red">'+ddlLabel(nearest)+'</b></span>';
-document.getElementById("heroChips").innerHTML =
-  '<span class="hero-chip">今天 <b class="hl-blue">'+todays.length+' 节课</b></span>'+
-  nearestChip+
-  '<span class="hero-chip">第 <b>'+weekOfYear()+'</b> 周</span>'+
-  '<span class="hero-chip">待办 <b class="hl-blue">'+todos.length+'</b> 项</span>';
-document.getElementById("todayCount").textContent = "共 "+todays.length+" 节";
-document.getElementById("weekLabel").textContent = "第 "+weekOfYear()+" 周";
-
-function pad(n){return String(n).padStart(2,"0");}
-function hhmm(d){return pad(d.getHours())+":"+pad(d.getMinutes());}
-const tl = document.getElementById("timeline");
-if(todays.length===0){
-  tl.innerHTML = '<div class="empty">今天没课，去图书馆吧</div>';
-}else{
-  tl.innerHTML = todays.map(c=>{
-    const start=new Date(), end=new Date();
-    const [sh,sm]=c.start.split(":"); const [eh,em]=c.end.split(":");
-    start.setHours(+sh,+sm,0,0); end.setHours(+eh,+em,0,0);
-    const state = now>end?"past":(now>=start?"live":"");
-    return '<div class="tl-item '+state+'" onclick="location.href=\'course.html?id='+encodeURIComponent(c.id)+'\'">'+
-      '<div class="row"><span class="name">'+escapeHtml(c.name)+'</span>'+
-      '<span class="chip '+(c.category==="必修"?"gray":"gray")+'">'+escapeHtml(c.category)+'</span>'+
-      (state==="live"?'<span class="chip red">进行中</span>':(state==="past"?'<span class="chip gray">已结束</span>':''))+
-      '<span class="goto">进入资料库 →</span></div>'+
-      '<div class="row" style="margin-top:6px"><span class="time">'+c.start+' – '+c.end+'</span>'+
-      '<span class="room">'+escapeHtml(c.room)+' · '+escapeHtml(c.teacher)+'</span></div>'+
-      '</div>';
-  }).join("");
-}
-
-const dl = document.getElementById("ddlList");
-const top5 = todos.slice(0,5);
-if(top5.length===0){
-  dl.innerHTML = '<div class="empty">没有待办 DDL，干得漂亮</div>';
-}else{
-  dl.innerHTML = top5.map(d=>{
-    const dlv=daysLeft(d.due);
-    const c = courseById(d.course);
-    const nav = c ? "course.html?id="+encodeURIComponent(c.id) : "ddl.html";
-    return '<div class="ddl-row" onclick="location.href=\''+nav+'\'">'+
-      '<div class="bar '+ddlLevel(dlv)+'"></div>'+
-      '<div class="main"><div class="title">'+escapeHtml(d.title)+' <span class="tag">'+escapeHtml(d.type)+'</span></div>'+
-      '<div class="meta">'+escapeHtml(d.course)+' · '+d.due.replace("T"," ")+'</div></div>'+
-      '<div class="actions"><span class="chip '+ddlLevel(dlv)+'">'+ddlLabel(dlv)+'</span></div>'+
-      '</div>';
-  }).join("");
-}
-
-function copyAddPrompt(){
-  const txt = "帮我在「今天」工作台里加一条：\n- 课程：<课程名，周几，第几节，教室，教师>（或 DDL：<任务名> <截止时间> <所属课程>，或课件：<把文件放进 <课程名>>）";
-  copy(txt,"已复制录入模板，粘贴到对话里填上内容即可");
-}
+(function () {
+  var db = window.__SMART_PAGE__ && window.__SMART_PAGE__.database;
+  if (!db) { if (window.__pageFail) window.__pageFail(new Error("请从 WorkBuddy 资料库在线打开本页面，才能读写线上数据")); return; }
+  var p1 = db.query({ databaseId: "krVlbHBrfM1JF150rYcIzc", pageSize: 100 }).then(function (res) { APP.seed("courses", (res && res.results) || []); });
+  var p2 = db.query({ databaseId: "wqok9b87n41XuCOAO0fmw2", pageSize: 100 }).then(function (res) { APP.seed("ddl", (res && res.results) || []); });
+  var p3 = db.query({ databaseId: "yrJ0J8V2PGC9BYL5DRXzPj", pageSize: 100 }).then(function (res) { APP.seed("notes", (res && res.results) || []); });
+  var p4 = db.query({ databaseId: "Y5pDUPZmwBZS5A9fyiAQY0", pageSize: 100 }).then(function (res) { APP.seed("qa", (res && res.results) || []); });
+  var p5 = db.query({ databaseId: "wmM5yZdgkNm35GAuIDFU1o", pageSize: 100 }).then(function (res) { APP.seed("courseware", (res && res.results) || []); });
+  var p6 = db.query({ databaseId: "AcFHWXjqQgqEFUEka87Lft", pageSize: 100 }).then(function (res) { APP.seed("settings", (res && res.results) || []); });
+  Promise.all([p1, p2, p3, p4, p5, p6]).then(function () { if (window.bootApp) window.bootApp(); })
+    .catch(function (e) { if (window.__pageFail) window.__pageFail(e); });
+})();
 </script>
 </body>
 </html>

@@ -45,7 +45,7 @@ button{font-family:inherit}
 
 /* ---------- 顶部导航 ---------- */
 .topbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.topbar-inner{max-width:1024px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:12px 24px}
+.topbar-inner{max-width:960px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:12px 32px}
 .brand{font-weight:600;font-size:15px;letter-spacing:.3px;display:flex;align-items:center;gap:9px;margin-right:18px;white-space:nowrap}
 .brand .dot{width:22px;height:22px;border-radius:7px;background:var(--primary);position:relative;box-shadow:0 2px 8px rgba(76,130,239,.35)}
 .brand .dot::after{content:"";position:absolute;inset:5px;border-radius:4px;background:rgba(255,255,255,.85)}
@@ -59,7 +59,8 @@ button{font-family:inherit}
 .top-extra a:hover{color:var(--primary-deep)}
 
 /* ---------- 布局容器 ---------- */
-.wrap{max-width:1024px;margin:0 auto;padding:30px 24px 72px}
+.wrap{max-width:960px;margin:0 auto;padding:34px 32px 80px}
+#view-home,#view-schedule,#view-ddl,#view-notes,#view-course{max-width:960px;margin:0 auto;padding:34px 32px 80px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow-sm);transition:box-shadow .2s}
 .card + .card{margin-top:18px}
 h1{font-size:24px;font-weight:600;letter-spacing:.2px}
@@ -244,6 +245,9 @@ h3{font-size:13.5px;font-weight:600}
 .hint.warn{background:var(--amber-weak);color:var(--amber-deep);border:1px solid rgba(226,154,60,.18)}
 .hint.info{background:var(--primary-weak);color:var(--primary-deep);border:1px solid rgba(76,130,239,.18)}
 .hint.ok{background:var(--green-weak);color:var(--green-deep);border:1px solid rgba(55,161,111,.18)}
+/* V5.8：提示条里的可点动作（复制归档指令） */
+.hint a{color:inherit;text-decoration:underline;text-underline-offset:3px;font-weight:600;cursor:pointer}
+.hint a:hover{opacity:.82}
 
 /* ---------- 模态框 ---------- */
 .modal-mask{position:fixed;inset:0;background:rgba(24,28,34,.42);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:7vh 18px;opacity:0;pointer-events:none;transition:opacity .2s;backdrop-filter:blur(3px)}
@@ -260,11 +264,16 @@ h3{font-size:13.5px;font-weight:600}
 
 /* ---------- Toast ---------- */
 #toast{position:fixed;left:50%;bottom:38px;transform:translateX(-50%) translateY(16px);background:#20242B;color:#fff;font-size:13px;padding:11px 22px;border-radius:var(--radius-pill);opacity:0;pointer-events:none;transition:all .25s;z-index:99;max-width:84vw;text-align:center;box-shadow:var(--shadow-lg);font-weight:500}
-#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+/* V5.9：toast 里的撤销按钮（默认 pointer-events:none，仅 .show 时可点） */
+#toast{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px 14px}
+.toast-btn{border:none;background:rgba(255,255,255,.14);color:#fff;font-size:12px;font-weight:600;padding:5px 13px;border-radius:var(--radius-pill);cursor:pointer;transition:background .18s;font-family:inherit}
+.toast-btn:hover{background:rgba(255,255,255,.28)}
 
 /* ---------- 响应式 ---------- */
 @media (max-width:760px){
   .wrap{padding:22px 16px 60px}
+  #view-home,#view-schedule,#view-ddl,#view-notes,#view-course{padding:22px 16px 60px}
   .week-grid{display:none}
   .week-list{display:block}
   .course-layout{grid-template-columns:1fr}
