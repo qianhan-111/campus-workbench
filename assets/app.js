@@ -1,8 +1,9 @@
-/* 「今天」工作台 · 单页应用逻辑 V5.10（2026-10-08 单双周设置）
+/* 「今天」工作台 · 单页应用逻辑 V5.15（2026-10-20 DDL 可编辑 / 可删除）
  * 5 个功能视图合并于一个 document，避免资料库 page 运行时二次导航导致 SDK 失效；
  * 数据读写在 assets/db.js（资料库 database 实时同步）。
  * 版本沿革：V5.1 单页化 → V5.3 非整点课归行修复 → V5.5 同名课同色 → V5.6 可选字段容错
- *          → V5.7 同名课字段继承 → V5.9 首页 DDL 一键完成（含撤销）→ V5.10 单双周 + 周次过滤 */
+ *          → V5.7 同名课字段继承 → V5.9 首页 DDL 一键完成（含撤销）→ V5.10 单双周 + 周次过滤
+ *          → V5.15 DDL 支持编辑与删除（弹窗复用为编辑态 + 乐观删除 5 秒可撤销） */
 (function () {
   var APP_ = window.APP, DB = APP_.DB;
   var curView = "home", curCourseId = null, editingId = null, editorReady = false;
@@ -154,7 +155,9 @@
           '<div class="main"><div class="title">' + escapeHtml(x.title) + ' <span class="tag">' + escapeHtml(x.type) + '</span></div>' +
           '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + '</div></div>' +
           '<div class="actions"><span class="chip ' + ddlLevel(dlv) + '">' + ddlLabel(dlv) + '</span>' +
-          /* V5.9：首页直接点「完成」，不必先跳去 DDL 页；stopPropagation 避免同时触发整行跳转 */
+          /* V5.9：首页直接点「完成」，不必先跳去 DDL 页；stopPropagation 避免同时触发整行跳转
+             V5.15：首页也能直接改；删除收进编辑弹窗，卡片上不放危险按钮 */
+          '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')" title="编辑这条 DDL">✎ 编辑</button>' +
           '<button class="btn small primary" title="标记完成（5 秒内可撤销）" onclick="event.stopPropagation();finish(\'' + x.id + '\')">✓ 完成</button></div></div>';
       }).join("");
     }
@@ -293,6 +296,8 @@
       '<div class="main"><div class="title">' + escapeHtml(x.title) + ' <span class="tag">' + escapeHtml(x.type) + '</span></div>' +
       '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + (x.postponed_count ? ' · 已延期 ' + x.postponed_count + ' 次' : '') + '</div></div>' +
       '<div class="actions"><span class="chip ' + lv + '">' + ddlLabel(daysLeft(x.due)) + '</span>' +
+      /* V5.15：编辑入口放卡片上（一步到位），删除收进编辑弹窗，避免误点 */
+      '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')">✎ 编辑</button>' +
       '<button class="btn small" onclick="event.stopPropagation();postpone(\'' + x.id + '\')">顺延</button>' +
       '<button class="btn small primary" onclick="event.stopPropagation();finish(\'' + x.id + '\')">完成</button></div></div>';
   }
@@ -327,7 +332,9 @@
       return '<div class="ddl-row done" ' + (nav ? 'onclick="' + nav + '"' : '') + '>' +
         '<div class="bar gray"></div><div class="main"><div class="title">' + escapeHtml(x.title) + '</div>' +
         '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + ' 完成</div></div>' +
-        '<div class="actions"><button class="btn small" onclick="event.stopPropagation();undoFinish(\'' + x.id + '\')">恢复待办</button></div></div>';
+        '<div class="actions">' +
+        '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')">✎ 编辑</button>' +
+        '<button class="btn small" onclick="event.stopPropagation();undoFinish(\'' + x.id + '\')">恢复待办</button></div></div>';
     }).join("") : '<div class="empty">还没有完成的 DDL，点「完成」就会出现在这里</div>';
   }
   /* V5.9：一键完成 = 本地立刻生效 + 线上异步写 + 5 秒内可撤销（防手滑） */
@@ -365,40 +372,120 @@
     var p = function (n) { return (n < 10 ? "0" : "") + n; };
     return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T23:59";
   }
-  window.openDdlModal = function () {
+  /* V5.15：线上的 index.html 带平台注入的 data-page-node-id，动一个标签就要重跑 page 编辑 + pnid 重绑，
+     所以弹窗标题、删除按钮这些 UI 增量一律由 JS 注入，保持 HTML 与线上零 diff。
+     副作用：本机 file:// 打开也照样有这些按钮，不必依赖平台重新解析。 */
+  function ddlDelBtn() {
+    var foot = document.querySelector("#ddlMask .foot");
+    if (!foot) return null;
+    var btn = document.getElementById("ddlDelBtn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = "ddlDelBtn";
+      btn.className = "btn ghost";
+      btn.textContent = "删除";
+      btn.onclick = function () { delDdl(); };
+      /* 插到「说明文字」和「取消」之间，并把 auto 外边距从说明挪到删除上，保证左删右确认的布局 */
+      foot.insertBefore(btn, foot.children[1] || null);
+      var tip = foot.querySelector(".muted");
+      /* 整段重写而不是改 marginRight：这行 inline 里本来就有 margin-right:auto，逐个属性覆盖不保险 */
+      if (tip) tip.setAttribute("style", "font-size:12px;color:#A8AEB8");
+      btn.setAttribute("style", "margin-right:auto;color:var(--red)");
+    }
+    return btn;
+  }
+  var editingDdlId = null;
+  window.openDdlModal = function (id) {
+    var x = id ? DB.ddl.find(function (r) { return r.id === id; }) : null;
+    editingDdlId = x ? x.id : null;
+    var h3 = document.querySelector("#ddlMask h3");
+    if (h3) h3.textContent = x ? "编辑 DDL" : "添加 DDL";
+    var delB = ddlDelBtn();
+    if (delB) delB.style.visibility = x ? "visible" : "hidden";
+    /* 编辑态顺手把底部说明换成删除提示——删除只在弹窗里，得让人知道它在这儿 */
+    var tip = document.querySelector("#ddlMask .foot .muted");
+    if (tip) tip.textContent = x ? "改完保存即同步 · 删除后 5 秒内可撤销" : "保存即写入线上资料库，换设备都在";
     var sel = document.getElementById("d-course");
     var names = [];
     DB.courses.forEach(function (c) { if (c.name && names.indexOf(c.name) < 0) names.push(c.name); });
-    sel.innerHTML = names.map(function (n) { return '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>'; }).join("") +
-      '<option value="—">—（不关联课程）</option>';
-    document.getElementById("d-title").value = "";
-    document.getElementById("d-due").value = defaultDue();
-    document.getElementById("d-min").value = 60;
+    /* V5.15：编辑的课程可能已从课表删掉，补进下拉，避免它被静默改成第一门课 */
+    if (x && x.course && names.indexOf(x.course) < 0) names.push(x.course);
+    if (names.indexOf("—") < 0) names.push("—");
+    sel.innerHTML = names.map(function (n) {
+      return '<option value="' + escapeHtml(n) + '">' + escapeHtml(n === "—" ? "—（不关联课程）" : n) + '</option>';
+    }).join("");
+    document.getElementById("d-title").value = x ? (x.title || "") : "";
+    /* 截止字段库里可能是 "2026-10-21 23:59" 或带秒，统一成 datetime-local 认的 16 位 */
+    document.getElementById("d-due").value = x && x.due ? String(x.due).replace(" ", "T").slice(0, 16) : defaultDue();
+    document.getElementById("d-type").value = x && x.type ? x.type : "作业";
+    document.getElementById("d-min").value = x ? (x.estimate_minutes || 0) : 60;
+    sel.value = x && x.course ? x.course : "—";
     document.getElementById("ddlMask").classList.add("show");
     setTimeout(function () { document.getElementById("d-title").focus(); }, 60);
   };
-  window.closeDdlModal = function () { document.getElementById("ddlMask").classList.remove("show"); };
+  window.closeDdlModal = function () { document.getElementById("ddlMask").classList.remove("show"); editingDdlId = null; };
   window.quickAddDdl = function () { go("ddl"); openDdlModal(); return false; };
   window.saveDdl = function () {
     var title = document.getElementById("d-title").value.trim();
     var due = document.getElementById("d-due").value.trim();
     if (!title) { toast("任务名不能为空"); return; }
     if (!due) { toast("选一个截止时间"); return; }
-    var rec = {
-      id: nextDdlId(), title: title,
+    var patch = {
+      title: title,
       course: document.getElementById("d-course").value || "—",
       due: due.slice(0, 16),
       type: document.getElementById("d-type").value,
-      status: "todo",
-      postponed_count: 0,
-      estimate_minutes: +document.getElementById("d-min").value || 0,
-      created_at: todayStr()
+      estimate_minutes: +document.getElementById("d-min").value || 0
     };
-    APP_.add("ddl", rec).then(function () {
+    var done2 = function (word) {
       closeDdlModal();
       if (curView === "ddl") renderDdl(); else renderHome();
-      toast("「" + title + "」已加入 DDL ✓ 已同步线上");
-    }).catch(function (e) { toast("添加失败：" + ((e && e.message) || "请从资料库在线版打开后再试")); });
+      toast(word + " ✓ 已同步线上");
+    };
+    if (editingDdlId) {
+      var oldRec = DB.ddl.find(function (r) { return r.id === editingDdlId; });
+      if (!oldRec || !oldRec._rid) { toast("找不到这条记录的线上 ID，请刷新后重试"); return; }
+      /* 只传改得动的字段：status / 顺延次数 / 创建日期保持不变 */
+      APP_.upd("ddl", oldRec._rid, patch).then(function () { done2("「" + title + "」已更新"); })
+        .catch(function (e) { toast("保存失败：" + ((e && e.message) || "请稍后重试")); });
+    } else {
+      var rec = {
+        id: nextDdlId(), status: "todo", postponed_count: 0, created_at: todayStr()
+      };
+      for (var k in patch) rec[k] = patch[k];
+      APP_.add("ddl", rec).then(function () { done2("「" + title + "」已加入 DDL"); })
+        .catch(function (e) { toast("添加失败：" + ((e && e.message) || "请从资料库在线版打开后再试")); });
+    }
+  };
+  /* V5.15：删除也做成「乐观更新 + 5 秒撤销」，不用 confirm（沙箱里可能被拦截），手滑有救 */
+  window.removeDdl = function (id) {
+    var x = DB.ddl.find(function (r) { return r.id === id; });
+    if (!x || !x._rid) return;
+    var snap = {
+      id: x.id, title: x.title, course: x.course, due: x.due, type: x.type,
+      status: x.status, postponed_count: x.postponed_count || 0,
+      estimate_minutes: x.estimate_minutes || 0, created_at: x.created_at
+    };
+    var i = DB.ddl.indexOf(x);
+    if (i >= 0) DB.ddl.splice(i, 1);
+    renderDdl(); renderHome();
+    toast("「" + x.title + "」已删除", "撤销", function () { restoreDdl(snap); });
+    APP_.del("ddl", x._rid).catch(function (e) {
+      DB.ddl.splice(i, 0, x); renderDdl(); renderHome();
+      toast("删除失败，已还原：" + ((e && e.message) || "请稍后重试"));
+    });
+  };
+  /* 撤销删除 = 用快照整条重新写回（编号不变，顺延次数等原样保留） */
+  window.restoreDdl = function (s) {
+    APP_.add("ddl", s).then(function () { renderDdl(); renderHome(); toast("已恢复「" + s.title + "」"); })
+      .catch(function (e) { toast("恢复失败：" + ((e && e.message) || "请稍后重试")); });
+  };
+  /* 弹窗里那个「删除」按钮 */
+  window.delDdl = function () {
+    if (!editingDdlId) return;
+    var id = editingDdlId;
+    closeDdlModal();
+    removeDdl(id);
   };
   window.postpone = function (id) {
     var x = DB.ddl.find(function (r) { return r.id === id; });
@@ -673,9 +760,19 @@
     copy("把这份课件放进 " + name + "：\n<把课件文件拖进来一起发我>", "已复制。把 PPT/PDF 拖进这个对话框，附上这句话发我即可归档");
     return false;
   };
+  /* V5.15：把两处操作说明补上「改 / 删」，同样由 JS 注入，HTML 保持原样 */
+  function initDdlHints() {
+    try {
+      var lead = document.querySelector("#view-ddl .lead");
+      if (lead) lead.textContent = "红色 ≤3 天 · 琥珀 4-7 天 · 绿色 >7 天；✎ 改内容（删除在编辑弹窗里，5 秒内可撤销）· 顺延一天 · 完成销账 · 点卡片进课程资料库";
+      var home = document.getElementById("ddlList");
+      var sub = home && home.parentNode ? home.parentNode.querySelector(".sub") : null;
+      if (sub) sub.textContent = "✓ 销账 · ✎ 编辑（删除在里面）· 点卡片进课程资料库";
+    } catch (e) { /* 说明文案失败不影响功能 */ }
+  }
   window.__pageFail = function (e) {
     var box = document.getElementById("heroChips");
     if (box) box.innerHTML = '<span class="hero-chip">数据加载失败：' + escapeHtml((e && e.message) || "请从资料库在线打开") + '</span>';
   };
-  window.bootApp = function () { renderHome(); };
+  window.bootApp = function () { initDdlHints(); renderHome(); };
 })();
