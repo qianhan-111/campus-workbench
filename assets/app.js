@@ -1,9 +1,10 @@
-/* 「今天」工作台 · 单页应用逻辑 V5.15（2026-10-20 DDL 可编辑 / 可删除）
+/* 「今天」工作台 · 单页应用逻辑 V5.16（2026-10-20 DDL 编辑收成悬停铅笔）
  * 5 个功能视图合并于一个 document，避免资料库 page 运行时二次导航导致 SDK 失效；
  * 数据读写在 assets/db.js（资料库 database 实时同步）。
  * 版本沿革：V5.1 单页化 → V5.3 非整点课归行修复 → V5.5 同名课同色 → V5.6 可选字段容错
  *          → V5.7 同名课字段继承 → V5.9 首页 DDL 一键完成（含撤销）→ V5.10 单双周 + 周次过滤
- *          → V5.15 DDL 支持编辑与删除（弹窗复用为编辑态 + 乐观删除 5 秒可撤销） */
+ *          → V5.15 DDL 支持编辑与删除（弹窗复用为编辑态 + 乐观删除 5 秒可撤销）
+ *          → V5.16 DDL 页编辑改悬停铅笔（与课表一致），首页编辑只留 ✎ 图标 */
 (function () {
   var APP_ = window.APP, DB = APP_.DB;
   var curView = "home", curCourseId = null, editingId = null, editorReady = false;
@@ -157,7 +158,7 @@
           '<div class="actions"><span class="chip ' + ddlLevel(dlv) + '">' + ddlLabel(dlv) + '</span>' +
           /* V5.9：首页直接点「完成」，不必先跳去 DDL 页；stopPropagation 避免同时触发整行跳转
              V5.15：首页也能直接改；删除收进编辑弹窗，卡片上不放危险按钮 */
-          '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')" title="编辑这条 DDL">✎ 编辑</button>' +
+          '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')" title="编辑（删除在里面）" style="padding:0 9px">✎</button>' +
           '<button class="btn small primary" title="标记完成（5 秒内可撤销）" onclick="event.stopPropagation();finish(\'' + x.id + '\')">✓ 完成</button></div></div>';
       }).join("");
     }
@@ -288,6 +289,11 @@
   };
 
   /* ---------- DDL 视图 ---------- */
+  /* V5.16：DDL 页的编辑收成右上角悬停小铅笔（CSS .ddl-edit 默认 display:none，hover 才浮出），
+     与课表 chip 的交互保持一致；stopPropagation 防整行跳转 */
+  function pencilBtn(id) {
+    return '<button class="ddl-edit" title="编辑（删除在里面）" onclick="event.stopPropagation();openDdlModal(\'' + id + '\')">✎</button>';
+  }
   function ddlCard(x) {
     var lv = ddlLevel(daysLeft(x.due)), c = courseByRef(x.course);
     var nav = c ? "gotoCourse('" + encodeURIComponent(c.id) + "')" : "";
@@ -295,9 +301,9 @@
       '<div class="bar ' + lv + '"></div>' +
       '<div class="main"><div class="title">' + escapeHtml(x.title) + ' <span class="tag">' + escapeHtml(x.type) + '</span></div>' +
       '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + (x.postponed_count ? ' · 已延期 ' + x.postponed_count + ' 次' : '') + '</div></div>' +
+      /* V5.16：编辑收成右上角悬停铅笔（与课表一致），卡片表面只剩顺延/完成 */
+      pencilBtn(x.id) +
       '<div class="actions"><span class="chip ' + lv + '">' + ddlLabel(daysLeft(x.due)) + '</span>' +
-      /* V5.15：编辑入口放卡片上（一步到位），删除收进编辑弹窗，避免误点 */
-      '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')">✎ 编辑</button>' +
       '<button class="btn small" onclick="event.stopPropagation();postpone(\'' + x.id + '\')">顺延</button>' +
       '<button class="btn small primary" onclick="event.stopPropagation();finish(\'' + x.id + '\')">完成</button></div></div>';
   }
@@ -332,8 +338,8 @@
       return '<div class="ddl-row done" ' + (nav ? 'onclick="' + nav + '"' : '') + '>' +
         '<div class="bar gray"></div><div class="main"><div class="title">' + escapeHtml(x.title) + '</div>' +
         '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + ' 完成</div></div>' +
+        pencilBtn(x.id) +
         '<div class="actions">' +
-        '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')">✎ 编辑</button>' +
         '<button class="btn small" onclick="event.stopPropagation();undoFinish(\'' + x.id + '\')">恢复待办</button></div></div>';
     }).join("") : '<div class="empty">还没有完成的 DDL，点「完成」就会出现在这里</div>';
   }
@@ -764,10 +770,10 @@
   function initDdlHints() {
     try {
       var lead = document.querySelector("#view-ddl .lead");
-      if (lead) lead.textContent = "红色 ≤3 天 · 琥珀 4-7 天 · 绿色 >7 天；✎ 改内容（删除在编辑弹窗里，5 秒内可撤销）· 顺延一天 · 完成销账 · 点卡片进课程资料库";
+      if (lead) lead.textContent = "红色 ≤3 天 · 琥珀 4-7 天 · 绿色 >7 天；鼠标移到卡片上会浮出 ✎，点它改内容（删除在弹窗里，5 秒内可撤销）· 顺延一天 · 完成销账 · 点卡片进课程资料库";
       var home = document.getElementById("ddlList");
       var sub = home && home.parentNode ? home.parentNode.querySelector(".sub") : null;
-      if (sub) sub.textContent = "✓ 销账 · ✎ 编辑（删除在里面）· 点卡片进课程资料库";
+      if (sub) sub.textContent = "✓ 销账 · ✎ 改（删除在里面）· 点卡片进课程资料库";
     } catch (e) { /* 说明文案失败不影响功能 */ }
   }
   window.__pageFail = function (e) {
