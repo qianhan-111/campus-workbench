@@ -1,10 +1,12 @@
-/* 「今天」工作台 · 单页应用逻辑 V5.16（2026-10-20 DDL 编辑收成悬停铅笔）
+/* 「今天」工作台 · 单页应用逻辑 V5.17（2026-10-29 DDL 定位键改 _rid，修"点 A 开 B"）
  * 5 个功能视图合并于一个 document，避免资料库 page 运行时二次导航导致 SDK 失效；
  * 数据读写在 assets/db.js（资料库 database 实时同步）。
  * 版本沿革：V5.1 单页化 → V5.3 非整点课归行修复 → V5.5 同名课同色 → V5.6 可选字段容错
  *          → V5.7 同名课字段继承 → V5.9 首页 DDL 一键完成（含撤销）→ V5.10 单双周 + 周次过滤
  *          → V5.15 DDL 支持编辑与删除（弹窗复用为编辑态 + 乐观删除 5 秒可撤销）
- *          → V5.16 DDL 页编辑改悬停铅笔（与课表一致），首页编辑只留 ✎ 图标 */
+ *          → V5.16 DDL 页编辑改悬停铅笔（与课表一致），首页编辑只留 ✎ 图标
+ *          → V5.17 DDL 定位键由业务编号改为资料库行 ID _rid（编号重复导致"点后一条打开前一条"），
+ *                  并给 nextDdlId 加防重、撤销删除时避免二次撞号 */
 (function () {
   var APP_ = window.APP, DB = APP_.DB;
   var curView = "home", curCourseId = null, editingId = null, editorReady = false;
@@ -158,8 +160,8 @@
           '<div class="actions"><span class="chip ' + ddlLevel(dlv) + '">' + ddlLabel(dlv) + '</span>' +
           /* V5.9：首页直接点「完成」，不必先跳去 DDL 页；stopPropagation 避免同时触发整行跳转
              V5.15：首页也能直接改；删除收进编辑弹窗，卡片上不放危险按钮 */
-          '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + x.id + '\')" title="编辑（删除在里面）" style="padding:0 9px">✎</button>' +
-          '<button class="btn small primary" title="标记完成（5 秒内可撤销）" onclick="event.stopPropagation();finish(\'' + x.id + '\')">✓ 完成</button></div></div>';
+          '<button class="btn small" onclick="event.stopPropagation();openDdlModal(\'' + escapeHtml(x._rid) + '\')" title="编辑（删除在里面）" style="padding:0 9px">✎</button>' +
+          '<button class="btn small primary" title="标记完成（5 秒内可撤销）" onclick="event.stopPropagation();finish(\'' + escapeHtml(x._rid) + '\')">✓ 完成</button></div></div>';
       }).join("");
     }
   }
@@ -289,10 +291,15 @@
   };
 
   /* ---------- DDL 视图 ---------- */
+  /* V5.17：DDL 的定位键一律用资料库行 ID（_rid），不再用「编号」。
+     原因：编号是自增生成的业务字段，出现过重复（ddl21 / ddl22 各两条），
+     而所有操作都用 find(r => r.id === id) 取第一条，点后一条会打开前一条——就是"编辑页不是我点的那条"这个 bug。
+     _rid 由资料库保证唯一，换成它之后编号撞车也不会互相串。 */
+  function ddlByRid(rid) { return DB.ddl.find(function (r) { return r._rid === rid; }); }
   /* V5.16：DDL 页的编辑收成右上角悬停小铅笔（CSS .ddl-edit 默认 display:none，hover 才浮出），
      与课表 chip 的交互保持一致；stopPropagation 防整行跳转 */
-  function pencilBtn(id) {
-    return '<button class="ddl-edit" title="编辑（删除在里面）" onclick="event.stopPropagation();openDdlModal(\'' + id + '\')">✎</button>';
+  function pencilBtn(rid) {
+    return '<button class="ddl-edit" title="编辑（删除在里面）" onclick="event.stopPropagation();openDdlModal(\'' + escapeHtml(rid) + '\')">✎</button>';
   }
   function ddlCard(x) {
     var lv = ddlLevel(daysLeft(x.due)), c = courseByRef(x.course);
@@ -302,10 +309,10 @@
       '<div class="main"><div class="title">' + escapeHtml(x.title) + ' <span class="tag">' + escapeHtml(x.type) + '</span></div>' +
       '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + (x.postponed_count ? ' · 已延期 ' + x.postponed_count + ' 次' : '') + '</div></div>' +
       /* V5.16：编辑收成右上角悬停铅笔（与课表一致），卡片表面只剩顺延/完成 */
-      pencilBtn(x.id) +
+      pencilBtn(x._rid) +
       '<div class="actions"><span class="chip ' + lv + '">' + ddlLabel(daysLeft(x.due)) + '</span>' +
-      '<button class="btn small" onclick="event.stopPropagation();postpone(\'' + x.id + '\')">顺延</button>' +
-      '<button class="btn small primary" onclick="event.stopPropagation();finish(\'' + x.id + '\')">完成</button></div></div>';
+      '<button class="btn small" onclick="event.stopPropagation();postpone(\'' + escapeHtml(x._rid) + '\')">顺延</button>' +
+      '<button class="btn small primary" onclick="event.stopPropagation();finish(\'' + escapeHtml(x._rid) + '\')">完成</button></div></div>';
   }
   function renderDdl() {
     var d = nowDate();
@@ -338,14 +345,15 @@
       return '<div class="ddl-row done" ' + (nav ? 'onclick="' + nav + '"' : '') + '>' +
         '<div class="bar gray"></div><div class="main"><div class="title">' + escapeHtml(x.title) + '</div>' +
         '<div class="meta">' + escapeHtml(x.course) + ' · ' + x.due.replace("T", " ") + ' 完成</div></div>' +
-        pencilBtn(x.id) +
+        pencilBtn(x._rid) +
         '<div class="actions">' +
-        '<button class="btn small" onclick="event.stopPropagation();undoFinish(\'' + x.id + '\')">恢复待办</button></div></div>';
+        '<button class="btn small" onclick="event.stopPropagation();undoFinish(\'' + escapeHtml(x._rid) + '\')">恢复待办</button></div></div>';
     }).join("") : '<div class="empty">还没有完成的 DDL，点「完成」就会出现在这里</div>';
   }
-  /* V5.9：一键完成 = 本地立刻生效 + 线上异步写 + 5 秒内可撤销（防手滑） */
-  window.finish = function (id) {
-    var x = DB.ddl.find(function (r) { return r.id === id; });
+  /* V5.9：一键完成 = 本地立刻生效 + 线上异步写 + 5 秒内可撤销（防手滑）
+     V5.17：入参改为 _rid（见 ddlByRid 注释） */
+  window.finish = function (rid) {
+    var x = ddlByRid(rid);
     if (!x || !x._rid) return;
     x.status = "done";
     renderDdl(); renderHome();
@@ -355,8 +363,8 @@
       toast("同步失败，已还原：" + ((e && e.message) || "请稍后重试"));
     });
   };
-  window.undoFinish = function (id) {
-    var x = DB.ddl.find(function (r) { return r.id === id; });
+  window.undoFinish = function (rid) {
+    var x = ddlByRid(rid);
     if (!x || !x._rid) return;
     x.status = "todo";
     renderDdl(); renderHome();
@@ -370,7 +378,11 @@
       var m = String(x.id || "").match(/(\d+)$/);
       if (m) max = Math.max(max, +m[1]);
     });
-    return "ddl" + (max + 1);
+    /* V5.17：编号只是展示用的业务字段（定位已改走 _rid），但仍要保证不撞车——
+       万一库里已有同号，继续往上找空位，别再制造重复。 */
+    var n = max + 1;
+    while (DB.ddl.some(function (x) { return x.id === "ddl" + n; })) n++;
+    return "ddl" + n;
   }
   function defaultDue() {
     var d = nowDate();
@@ -400,10 +412,11 @@
     }
     return btn;
   }
+  /* V5.17：editingDdlId 存的是 _rid（资料库行 ID），不是业务编号 */
   var editingDdlId = null;
-  window.openDdlModal = function (id) {
-    var x = id ? DB.ddl.find(function (r) { return r.id === id; }) : null;
-    editingDdlId = x ? x.id : null;
+  window.openDdlModal = function (rid) {
+    var x = rid ? ddlByRid(rid) : null;
+    editingDdlId = x ? x._rid : null;
     var h3 = document.querySelector("#ddlMask h3");
     if (h3) h3.textContent = x ? "编辑 DDL" : "添加 DDL";
     var delB = ddlDelBtn();
@@ -449,7 +462,7 @@
       toast(word + " ✓ 已同步线上");
     };
     if (editingDdlId) {
-      var oldRec = DB.ddl.find(function (r) { return r.id === editingDdlId; });
+      var oldRec = ddlByRid(editingDdlId);
       if (!oldRec || !oldRec._rid) { toast("找不到这条记录的线上 ID，请刷新后重试"); return; }
       /* 只传改得动的字段：status / 顺延次数 / 创建日期保持不变 */
       APP_.upd("ddl", oldRec._rid, patch).then(function () { done2("「" + title + "」已更新"); })
@@ -464,8 +477,8 @@
     }
   };
   /* V5.15：删除也做成「乐观更新 + 5 秒撤销」，不用 confirm（沙箱里可能被拦截），手滑有救 */
-  window.removeDdl = function (id) {
-    var x = DB.ddl.find(function (r) { return r.id === id; });
+  window.removeDdl = function (rid) {
+    var x = ddlByRid(rid);
     if (!x || !x._rid) return;
     var snap = {
       id: x.id, title: x.title, course: x.course, due: x.due, type: x.type,
@@ -483,18 +496,20 @@
   };
   /* 撤销删除 = 用快照整条重新写回（编号不变，顺延次数等原样保留） */
   window.restoreDdl = function (s) {
+    /* V5.17：撤销删除时若编号已被别的记录占着（历史重复编号），换个空号再写回，避免二次撞号 */
+    if (DB.ddl.some(function (r) { return r.id === s.id; })) s.id = nextDdlId();
     APP_.add("ddl", s).then(function () { renderDdl(); renderHome(); toast("已恢复「" + s.title + "」"); })
       .catch(function (e) { toast("恢复失败：" + ((e && e.message) || "请稍后重试")); });
   };
   /* 弹窗里那个「删除」按钮 */
   window.delDdl = function () {
     if (!editingDdlId) return;
-    var id = editingDdlId;
+    var id = editingDdlId; /* V5.17：此处已是 _rid */
     closeDdlModal();
     removeDdl(id);
   };
-  window.postpone = function (id) {
-    var x = DB.ddl.find(function (r) { return r.id === id; });
+  window.postpone = function (rid) {
+    var x = ddlByRid(rid);
     if (!x || !x._rid) return;
     var due = new Date(x.due); due.setDate(due.getDate() + 1);
     var nd = due.toISOString().slice(0, 16);
